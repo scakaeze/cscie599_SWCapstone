@@ -4,18 +4,25 @@ from scrapy.linkextractors import LinkExtractor
 from time import sleep
 import random
 
+
+# Clean() ensures that
+# - empty mooc attributes are replaced with 'N/A'
+# - unwanted characters are removed
+# - 'instructor' attribute arrays are cleaned up
 def clean(data):
-	if (type(data) == type(None) or data == ''):
-		return 'N/A'
-	elif (type(data) == type('String')):
-		return data.strip().replace('\xa0','').replace('\n','').replace('\r','')
-	else :
-        return ''.join(data).replace(' and ',',').strip().split(',')
+    if (type(data) == type(None) or data == ''):
+    	return 'N/A'
+    elif (type(data) == type('String')):
+    	return data.strip().replace('\xa0','').replace('\n','').replace('\r','')
+    else :
+    	return ''.join(data).replace(' and ',',').strip().split(',')
 
 
 class CapstoneSpider(CrawlSpider):
     name = 'capstone'
     allowed_domains = ['class-central.com','classcentral.com']
+
+    #List of course catalogues URLs for the spider to start with
     start_urls = [
     'https://www.class-central.com/subject/cs/', 'https://www.classcentral.com/subject/ai', 'https://www.classcentral.com/subject/algorithms-and-data-structures',
     'https://www.classcentral.com/subject/internet-of-things', 'https://www.classcentral.com/subject/information-technology', 'https://www.classcentral.com/subject/cybersecurity',
@@ -31,6 +38,7 @@ class CapstoneSpider(CrawlSpider):
 
     rules = (Rule(LinkExtractor(deny_domains = ('google.com', 'facebook.com', 'twitter.com', 'instagram.com'), allow = ('course'), deny = ('review-id')), callback = 'parse_page', follow = True),)
 
+    #List to store subjects of intereste. Used in eliminating unwanted subjects
     accepted_subjects = [
     'Artificial Intelligence','Algorithms and Data Structures', 'Internet of Things','Information Technology', 'Cybersecurity',
     'Computer Networking', 'Machine Learning', 'DevOps', 'Deep Learning', 'Blockchain and Cryptocurrency', 'Bioinformatics',
@@ -38,53 +46,60 @@ class CapstoneSpider(CrawlSpider):
      'Android Development', 'iOS Development', 'Game Development', 'Programming Languages', 'Software Development',
      'Computer Science', 'Data Science', 'Programming']
 
+    #List to store MOOC URLs that meet our screening criteria. primarily to prevent duplication 
     accepted_urls = []
 
 
 
     def parse_page(self, response):
-        sleep(random.randrange(1,3))
+    	sleep(random.randrange(1,3))
 
-        split_url = (response.url).split('?')
-        unique_url = split_url[0]
+    	split_url = (response.url).split('?')
+    	unique_url = split_url[0]
 
-        subject_check = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
-		language_check = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
+    	#Scrape and store course subject and language
+    	subject_check = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+    	language_check = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
 
-        if (subject_check in self.accepted_subjects and unique_url not in self.accepted_urls and language_check == "English"):
-            self.accepted_urls.append(unique_url)
 
-            title = clean(response.xpath('//*[@id = "course-title"]/text()').extract_first())
-            partner = clean(response.xpath('//*[@class = "text--charcoal hover-text--underline"]/text()').extract_first())
-            platform = clean(response.xpath('//*[@class = "text--charcoal text--italic hover-text--underline"]/text()').extract_first())
-            overview = clean(''.join(response.xpath('//*[@data-expand-article-target = "overview"]//text()').extract()))
-            provider = clean(response.xpath('//strong[text()="Provider"]/following-sibling::a/text()').extract_first())
-            subject = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
-            cost = clean(response.xpath('//strong[text()="Cost"]/following-sibling::span/text()').extract_first())
-            session = clean(response.xpath('//strong[text()="Session"]/following-sibling::a/text()').extract_first())
-            language = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
-            start_date = clean(response.xpath('//strong[text()="Start Date"]/following-sibling::span/select/option/text()').extract_first())
-            effort = clean(response.xpath('//strong[text()="Effort"]/following-sibling::span/text()').extract_first())
-            duration = clean(response.xpath('//strong[text()="Duration"]/following-sibling::span/text()').extract_first())
-            instructors = clean(response.xpath('//*[@class="col width-100 text-2 medium-up-text-1"]/text()').extract())
-            syllabus = clean(''.join(response.xpath('//*[@data-expand-article-target = "syllabus"]/.//text()').extract()))
+    	#MOOC acceptance Criteria
+    	# - Course duplicates are not stored
+    	# - Courses are from accepted aubjects
+    	# - Only english language courses are stored
+    	if (subject_check in self.accepted_subjects and unique_url not in self.accepted_urls and language_check == "English"):
+    		self.accepted_urls.append(unique_url)
 
-            yield {
-            'URL': unique_url,
-            'Title': title,
-        	'Partner': partner,
-        	'Provider': provider,
-        	'Subject' : subject,
-        	'Overview' : overview,
-        	'Syllabus' : syllabus,
-        	'Cost' : cost,
-        	'Session' : session,
-        	'Language' : language,
-        	'Start Date' : start_date,
-        	'Effort' : effort,
-        	'Duration' : duration,
-        	'Instructors' : instructors
-            }
-        else:
-           #yield {'URL REJECTED': response.url, 'REJECTED SUBJECT': sub_check}
-            pass
+    		title = clean(response.xpath('//*[@id = "course-title"]/text()').extract_first())
+    		partner = clean(response.xpath('//*[@class = "text--charcoal hover-text--underline"]/text()').extract_first())
+    		platform = clean(response.xpath('//*[@class = "text--charcoal text--italic hover-text--underline"]/text()').extract_first())
+    		overview = clean(''.join(response.xpath('//*[@data-expand-article-target = "overview"]//text()').extract()))
+    		provider = clean(response.xpath('//strong[text()="Provider"]/following-sibling::a/text()').extract_first())
+    		subject = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+    		cost = clean(response.xpath('//strong[text()="Cost"]/following-sibling::span/text()').extract_first())
+    		session = clean(response.xpath('//strong[text()="Session"]/following-sibling::a/text()').extract_first())
+    		language = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
+    		start_date = clean(response.xpath('//strong[text()="Start Date"]/following-sibling::span/select/option/text()').extract_first())
+    		effort = clean(response.xpath('//strong[text()="Effort"]/following-sibling::span/text()').extract_first())
+    		duration = clean(response.xpath('//strong[text()="Duration"]/following-sibling::span/text()').extract_first())
+    		instructors = clean(response.xpath('//*[@class="col width-100 text-2 medium-up-text-1"]/text()').extract())
+    		syllabus = clean(''.join(response.xpath('//*[@data-expand-article-target = "syllabus"]/.//text()').extract()))
+
+    		yield {
+			'URL': unique_url,
+			'Title': title,
+			'Partner': partner,
+			'Provider': provider,
+			'Subject' : subject,
+			'Overview' : overview,
+			'Syllabus' : syllabus,
+			'Cost' : cost,
+			'Session' : session,
+			'Language' : language,
+			'Start Date' : start_date,
+			'Effort' : effort,
+			'Duration' : duration,
+			'Instructors' : instructors
+			}
+    	else:
+		   #yield {'URL REJECTED': response.url, 'REJECTED SUBJECT': sub_check}
+		    pass
