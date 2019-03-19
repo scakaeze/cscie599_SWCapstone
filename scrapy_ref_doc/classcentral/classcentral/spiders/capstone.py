@@ -6,9 +6,9 @@ import random
 
 def clean(data):
 	if (type(data) == type(None) or data == ''):
-        return 'N/A'
+		return 'N/A'
 	elif (type(data) == type('String')):
-        return data.strip().replace('\xa0','').replace('\n','').replace('\r','')
+		return data.strip().replace('\xa0','').replace('\n','').replace('\r','')
 	else :
         return ''.join(data).replace(' and ',',').strip().split(',')
 
@@ -38,7 +38,7 @@ class CapstoneSpider(CrawlSpider):
      'Android Development', 'iOS Development', 'Game Development', 'Programming Languages', 'Software Development',
      'Computer Science', 'Data Science', 'Programming']
 
-    good_urls = []
+    accepted_urls = []
 
 
 
@@ -48,10 +48,11 @@ class CapstoneSpider(CrawlSpider):
         split_url = (response.url).split('?')
         unique_url = split_url[0]
 
-        sub_check = subject = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+        subject_check = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+		language_check = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
 
-        if sub_check in self.accepted_subjects and unique_url not in self.good_urls:
-            self.good_urls.append(unique_url)
+        if (subject_check in self.accepted_subjects and unique_url not in self.accepted_urls and language_check == "English"):
+            self.accepted_urls.append(unique_url)
 
             title = clean(response.xpath('//*[@id = "course-title"]/text()').extract_first())
             partner = clean(response.xpath('//*[@class = "text--charcoal hover-text--underline"]/text()').extract_first())
