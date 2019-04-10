@@ -1,28 +1,64 @@
-# -*- coding: utf-8 -*-
 from scrapy.spiders import CrawlSpider, Rule
 from scrapy.linkextractors import LinkExtractor
 from time import sleep
 import random
+import requests
 
-
-# Clean() ensures that
-# - empty mooc attributes are replaced with 'N/A'
-# - unwanted characters are removed
-# - 'instructor' attribute arrays are cleaned up
 def clean(data):
-    if (type(data) == type(None) or data == ''):
-    	return 'N/A'
-    elif (type(data) == type('String')):
-    	return data.strip().replace('\xa0','').replace('\n','').replace('\r','')
+    if (type(data) == type(None) or data == '' or len(data) == 0):
+        return 'N/A'
+    elif (isinstance(data, unicode)):
+        data1 = data.strip().replace('\n','').replace('\r','')
+        utf8Data = (unicodeToUtf8(data1)).replace("\'","'").replace('\xe2\x80\xa6','...').replace('\xc2\xa0','')
+        return utf8Data
     else :
-    	return ''.join(data).replace(' and ',',').strip().split(',')
+        utf8Array = unicodeToUtf8(''.join(data).replace(' and ',',').strip().replace('\n','').replace('\r',''))
+        return utf8Array.strip().split(',')
+
+def unicodeToUtf8(unicodeData):
+
+    uni2utf8 = {
+            ord('\xe2\x80\x8b'.decode('utf-8')): ord('.'),
+           # ord('\xe2\xa0'.decode('utf-8')):  ord('.'),
+            ord('\xe2\x80\x99'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\x9c'.decode('utf-8')): ord('"'),
+            ord('\xe2\x80\x9d'.decode('utf-8')): ord('"'),
+            ord('\xe2\x80\x9e'.decode('utf-8')): ord('"'),
+            ord('\xe2\x80\x9f'.decode('utf-8')): ord('"'),
+            ord('\xc3\xa9'.decode('utf-8')): ord('e'),
+            ord('\xe2\x80\x9c'.decode('utf-8')): ord('"'),
+            ord('\xe2\x80\x93'.decode('utf-8')): ord('-'),
+            ord('\xe2\x80\x92'.decode('utf-8')): ord('-'),
+            ord('\xe2\x80\x94'.decode('utf-8')): ord('-'),
+            ord('\xe2\x80\x94'.decode('utf-8')): ord('-'),
+            ord('\xe2\x80\x98'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\x9b'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xa2'.decode('utf-8')): ord("*"),
+
+            ord('\xe2\x80\x90'.decode('utf-8')): ord('-'),
+            ord('\xe2\x80\x91'.decode('utf-8')): ord('-'),
+
+            ord('\xe2\x80\xb2'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xb3'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xb4'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xb5'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xb6'.decode('utf-8')): ord("'"),
+            ord('\xe2\x80\xb7'.decode('utf-8')): ord("'"),
+
+            ord('\xe2\x81\xba'.decode('utf-8')): ord("+"),
+            ord('\xe2\x81\xbb'.decode('utf-8')): ord("-"),
+            ord('\xe2\x81\xbc'.decode('utf-8')): ord("="),
+            ord('\xe2\x81\xbd'.decode('utf-8')): ord("("),
+            ord('\xe2\x81\xbe'.decode('utf-8')): ord(")"),
+
+                            }
+    return unicodeData.translate(uni2utf8).encode('utf-8')
+
 
 
 class CapstoneSpider(CrawlSpider):
     name = 'capstone'
     allowed_domains = ['class-central.com','classcentral.com']
-
-    #List of course catalogues URLs for the spider to start with
     start_urls = [
     'https://www.class-central.com/subject/cs/', 'https://www.classcentral.com/subject/ai', 'https://www.classcentral.com/subject/algorithms-and-data-structures',
     'https://www.classcentral.com/subject/internet-of-things', 'https://www.classcentral.com/subject/information-technology', 'https://www.classcentral.com/subject/cybersecurity',
@@ -38,7 +74,6 @@ class CapstoneSpider(CrawlSpider):
 
     rules = (Rule(LinkExtractor(deny_domains = ('google.com', 'facebook.com', 'twitter.com', 'instagram.com'), allow = ('course'), deny = ('review-id')), callback = 'parse_page', follow = True),)
 
-    #List to store subjects of intereste. Used in eliminating unwanted subjects
     accepted_subjects = [
     'Artificial Intelligence','Algorithms and Data Structures', 'Internet of Things','Information Technology', 'Cybersecurity',
     'Computer Networking', 'Machine Learning', 'DevOps', 'Deep Learning', 'Blockchain and Cryptocurrency', 'Bioinformatics',
@@ -46,60 +81,90 @@ class CapstoneSpider(CrawlSpider):
      'Android Development', 'iOS Development', 'Game Development', 'Programming Languages', 'Software Development',
      'Computer Science', 'Data Science', 'Programming']
 
-    #List to store MOOC URLs that meet our screening criteria. primarily to prevent duplication 
     accepted_urls = []
 
 
 
+
     def parse_page(self, response):
-    	sleep(random.randrange(1,3))
+        sleep(random.randrange(1,3))
 
-    	split_url = (response.url).split('?')
-    	unique_url = split_url[0]
+        split_url = (response.url).split('?')
+        unique_url = split_url[0]
 
-    	#Scrape and store course subject and language
-    	subject_check = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
-    	language_check = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
+        subject_check = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+        language_check = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
+
+        if (subject_check in self.accepted_subjects and unique_url not in self.accepted_urls and language_check == "English"):
+            self.accepted_urls.append(unique_url)
+
+            title = clean(response.xpath('//*[@id = "course-title"]/text()').extract_first())
+            partner = clean(response.xpath('//*[@class = "text--charcoal hover-text--underline"]/text()').extract_first())
+            platform = clean(response.xpath('//*[@class = "text--charcoal text--italic hover-text--underline"]/text()').extract_first())
+            overview = clean(''.join(response.xpath('//*[@data-expand-article-target = "overview"]//text()').extract()))
+            provider = clean(response.xpath('//strong[text()="Provider"]/following-sibling::a/text()').extract_first())
+            subject = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
+            cost = clean(response.xpath('//strong[text()="Cost"]/following-sibling::span/text()').extract_first())
+            session = clean(response.xpath('//strong[text()="Session"]/following-sibling::a/text()').extract_first())
+            language = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
+            start_date = clean(response.xpath('//strong[text()="Start Date"]/following-sibling::span/select/option/text()').extract_first())
+            effort = clean(response.xpath('//strong[text()="Effort"]/following-sibling::span/text()').extract_first())
+            duration = clean(response.xpath('//strong[text()="Duration"]/following-sibling::span/text()').extract_first())
+            instructors = clean(response.xpath('//*[@class="col width-100 text-2 medium-up-text-1"]/text()').extract())
+            syllabus = clean(''.join(response.xpath('//*[@data-expand-article-target = "syllabus"]/.//text()').extract()))
+            interestedStudents = clean(response.xpath('//strong[@class = "text-4 medium-up-text-3 text--bold text--charcoal"]/text()').extract_first())
+            numOfReviews = clean("".join(response.xpath('//a[@id = "read-reviews"]/text()').extract()).strip())
 
 
-    	#MOOC acceptance Criteria
-    	# - Course duplicates are not stored
-    	# - Courses are from accepted aubjects
-    	# - Only english language courses are stored
-    	if (subject_check in self.accepted_subjects and unique_url not in self.accepted_urls and language_check == "English"):
-    		self.accepted_urls.append(unique_url)
+            providerURL = clean(response.xpath('//*[@id = "btnProviderCoursePage"]/@href').extract_first())
+            hdr = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)', 'Referer' : 'http://www.google.com/'}
+            res = requests.get(providerURL, headers = hdr)
+            providerLongURL = res.url
+            providerLongURLArray = providerLongURL.split("?")
+            providerURL = clean(providerLongURLArray[0])
 
-    		title = clean(response.xpath('//*[@id = "course-title"]/text()').extract_first())
-    		partner = clean(response.xpath('//*[@class = "text--charcoal hover-text--underline"]/text()').extract_first())
-    		platform = clean(response.xpath('//*[@class = "text--charcoal text--italic hover-text--underline"]/text()').extract_first())
-    		overview = clean(''.join(response.xpath('//*[@data-expand-article-target = "overview"]//text()').extract()))
-    		provider = clean(response.xpath('//strong[text()="Provider"]/following-sibling::a/text()').extract_first())
-    		subject = clean(response.xpath('//strong[text()="Subject"]/following-sibling::a/text()').extract_first())
-    		cost = clean(response.xpath('//strong[text()="Cost"]/following-sibling::span/text()').extract_first())
-    		session = clean(response.xpath('//strong[text()="Session"]/following-sibling::a/text()').extract_first())
-    		language = clean(response.xpath('//strong[text()="Language"]/following-sibling::a/text()').extract_first())
-    		start_date = clean(response.xpath('//strong[text()="Start Date"]/following-sibling::span/select/option/text()').extract_first())
-    		effort = clean(response.xpath('//strong[text()="Effort"]/following-sibling::span/text()').extract_first())
-    		duration = clean(response.xpath('//strong[text()="Duration"]/following-sibling::span/text()').extract_first())
-    		instructors = clean(response.xpath('//*[@class="col width-100 text-2 medium-up-text-1"]/text()').extract())
-    		syllabus = clean(''.join(response.xpath('//*[@data-expand-article-target = "syllabus"]/.//text()').extract()))
+            tagList = []
+            for element in response.xpath('//*[@class = "block medium-up-inline-block btn-gray btn--medium text--normal margin-bottom-xsmall medium-up-margin-right-xsmall"]/text()').extract():
+                tagList.append((element.strip()).encode('utf-8'))
 
-    		yield {
-			'URL': unique_url,
-			'Title': title,
-			'Partner': partner,
-			'Provider': provider,
-			'Subject' : subject,
-			'Overview' : overview,
-			'Syllabus' : syllabus,
-			'Cost' : cost,
-			'Session' : session,
-			'Language' : language,
-			'Start Date' : start_date,
-			'Effort' : effort,
-			'Duration' : duration,
-			'Instructors' : instructors
-			}
-    	else:
-		   #yield {'URL REJECTED': response.url, 'REJECTED SUBJECT': sub_check}
-		    pass
+            if(len(tagList) == 0):
+                tagList = 'N/A'
+
+            rating = 0.0
+            for star in response.xpath('//*[@class = "review-rating "]/i/@class').extract():
+                check = star.encode('utf-8')
+                if (check == 'icon-star icon--xxsmall'):
+                    rating = rating + 1.0
+                elif (check == 'icon-star-half icon--xxsmall'):
+                    rating = rating + 0.5
+                else:
+                    rating = rating + 0.0
+
+            relatedCourses = []
+            for partialUrl in response.xpath('//*[@class = "text--charcoal text-2 medium-up-text-1 text--bold block course-name"]/@href').extract():
+                partialUrlUTF8 = partialUrl.encode('utf-8')
+                relatedCourses.append('https://www.classcentral.com' + partialUrlUTF8)
+
+
+            yield {
+            'URL': unique_url,
+            'Title': title,
+            'Partner': partner,
+            'Provider': provider,
+            'ProviderURL': providerURL,
+            'Subject' : subject,
+            'Overview' : overview,
+            'Syllabus' : syllabus,
+            'Cost' : cost,
+            'Session' : session,
+            'Language' : language,
+            'Start Date' : start_date,
+            'Effort' : effort,
+            'Duration' : duration,
+            'Instructors' : instructors,
+            'CC_Tags': tagList,
+            'CC_Interested_Students': interestedStudents,
+            'CC_Rating' : rating,
+            'CC_Number_Of_Reviews' : numOfReviews,
+            'CC_Related_Courses' : relatedCourses
+            }
